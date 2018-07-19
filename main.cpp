@@ -5,19 +5,22 @@
 using namespace std;
 using namespace cv;
 Mat src, src_gray;
-int thresh=100;
+int thresh=50;
 RNG rng(12345);
 Mat canny_output;
 vector<vector<Point>> contours;
 vector<Vec4i> hierarchy;
 vector<Vec4i> hierarchy_update;
+#define length = 1280
+#define width =
 int max_trackbar = 500;
 const char* standard_name = "Standard Hough Lines Demo";
 const char* probabilistic_name = "Probabilistic Hough Lines Demo";
-int min_threshold = 50;
+int min_threshold = 1;
 int s_trackbar = max_trackbar;
 Mat edges;
 Mat standard_hough;
+cv::Point2f center(0,0);
 
 
 bool compareContourAreas ( std::vector<cv::Point> contour1, std::vector<cv::Point> contour2 ) {
@@ -25,64 +28,22 @@ bool compareContourAreas ( std::vector<cv::Point> contour1, std::vector<cv::Poin
     double j = fabs( contourArea(cv::Mat(contour2)) );
     return ( i < j );
 }
-cv::Point2f center(0,0);
-
-cv::Point2f computeIntersect(cv::Vec4i a,
-                             cv::Vec4i b)
-{
-    int x1 = a[0], y1 = a[1], x2 = a[2], y2 = a[3], x3 = b[0], y3 = b[1], x4 = b[2], y4 = b[3];
-    float denom;
-
-    if (float d = ((float)(x1 - x2) * (y3 - y4)) - ((y1 - y2) * (x3 - x4)))
-    {
-        cv::Point2f pt;
-        pt.x = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / d;
-        pt.y = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / d;
-        return pt;
-    }
-    else
-        return cv::Point2f(-1, -1);
-}
-
-void sortCorners(std::vector<cv::Point2f>& corners,
-                 cv::Point2f center)
-{
-    std::vector<cv::Point2f> top, bot;
-
-    for (int i = 0; i < corners.size(); i++)
-    {
-        if (corners[i].y < center.y)
-            top.push_back(corners[i]);
-        else
-            bot.push_back(corners[i]);
-    }
-    corners.clear();
-
-    if (top.size() == 2 && bot.size() == 2){
-        cv::Point2f tl = top[0].x > top[1].x ? top[1] : top[0];
-        cv::Point2f tr = top[0].x > top[1].x ? top[0] : top[1];
-        cv::Point2f bl = bot[0].x > bot[1].x ? bot[1] : bot[0];
-        cv::Point2f br = bot[0].x > bot[1].x ? bot[0] : bot[1];
-
-
-        corners.push_back(tl);
-        corners.push_back(tr);
-        corners.push_back(br);
-        corners.push_back(bl);
-    }
-}
 void Standard_Hough( int, void* )
 {
     vector<Vec2f> s_lines;
+    vector<vector<Point>> lines;
     cvtColor( edges, standard_hough, COLOR_GRAY2BGR );
 
     /// 1. Use Standard Hough Transform
-    HoughLines( edges, s_lines, 1, CV_PI/180, min_threshold + s_trackbar, 0, 0 );
-
+    HoughLines( edges, s_lines, 0.5, CV_PI/180, min_threshold + s_trackbar, 0, 0 );
+    vector<Point> pt;
     /// Show the result
+    //cout << s_lines.size()<< endl;
     for( size_t i = 0; i < s_lines.size(); i++ )
     {
         float r = s_lines[i][0], t = s_lines[i][1];
+        cout << i << endl;
+        cout << r << " "<< t << endl;
         double cos_t = cos(t), sin_t = sin(t);
         double x0 = r*cos_t, y0 = r*sin_t;
         double alpha = 1000;
@@ -90,7 +51,20 @@ void Standard_Hough( int, void* )
         Point pt1( cvRound(x0 + alpha*(-sin_t)), cvRound(y0 + alpha*cos_t) );
         Point pt2( cvRound(x0 - alpha*(-sin_t)), cvRound(y0 - alpha*cos_t) );
         line( standard_hough, pt1, pt2, Scalar(255,255,255), 3, LINE_AA);
+//        pt.push_back(pt1);
+//        pt.push_back(pt2);
+
+//       lines.push_back(pt);
+//        cout << lines.size()<< endl;
+
+//        pt.pop_back();
+//        pt.pop_back();
     }
+    //if(!lines.empty())
+    //{
+
+    //}
+    //cout << lines[1]<< endl;
     int dilation_size = 1 ;
     Mat element = getStructuringElement( MORPH_RECT,
                                          Size( 2*dilation_size + 1, 2*dilation_size+1 ),
@@ -105,12 +79,12 @@ void Standard_Hough( int, void* )
     /// Apply the erosion operation
     erode(standard_hough,standard_hough,element);
     /// Applying erosion and dilation for getting continuous lines
-
+    cout << standard_hough.size()<< endl;
     imshow( standard_name, standard_hough );
 }
 
 int main(int argc,char** argv) {
-    String imagename("/home/swarnendu/Downloads/pics/1.jpeg");
+    String imagename("/home/swarnendu/Downloads/pics/8.jpeg");
     // reading the image path
     if(argc>1)
     {
@@ -123,6 +97,19 @@ int main(int argc,char** argv) {
         cerr << "No image supplied ..." << endl;
         return -1;
     }
+    imshow("Source Original",src);
+
+    // test
+    cvtColor(src,src,COLOR_BGR2YCrCb);
+    vector<Mat> channels;
+    split(src,channels);
+    //Ptr<CLAHE> ptr = createCLAHE(2);
+    //ptr->apply(channels[0],channels[0]);
+    equalizeHist(channels[0],channels[0]);
+    merge(channels,src);
+    cvtColor(src,src, COLOR_YCrCb2BGR);
+    imshow("Source2",src);
+
     //Ptr<CLAHE> hist = createCLAHE(400);
     //hist->apply(src,src);
     cvtColor(src,src_gray,COLOR_BGR2GRAY);
@@ -185,14 +172,15 @@ int main(int argc,char** argv) {
     //cvtColor(drawing,drawing,COLOR_GRAY2BGR);
     // Standard Hough Line Transform
     /// Create Trackbars for Thresholds
-//    char thresh_label[50];
-//    sprintf( thresh_label, "Thres: %d + input", min_threshold );
+    char thresh_label[50];
+    sprintf( thresh_label, "Thres: %d + input", min_threshold );
 
     namedWindow( standard_name, WINDOW_AUTOSIZE );
     cout <<"start "<< endl;
     createTrackbar( "Threshold", standard_name, &s_trackbar, max_trackbar, Standard_Hough);// Draw the lines
     Standard_Hough(0, 0);
+    //int start_threshold = 500;
 
-    waitKey(0);
+    waitKey();
     return (0);
 }
