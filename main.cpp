@@ -14,7 +14,8 @@ vector<Vec4i> hierarchy_update;
 #define length  1280
 #define width 720
 #define w 400
-int max_trackbar = 500;
+#define dist_thresh 50
+int max_trackbar = 150;
 const char* standard_name = "Standard Hough Lines Demo";
 const char* probabilistic_name = "Probabilistic Hough Lines Demo";
 int min_threshold = 1;
@@ -41,15 +42,35 @@ void MyFilledCircle( Mat img, Point center )
             thickness,
             lineType );
 }
+bool check_dist(Point p, vector<Point> &final_intersection)
+{
+    cout << final_intersection.size()<< endl;
+    int flag=1;
+    for( int j= 0; j<final_intersection.size();j++)
+    {
+        double res = norm(p-final_intersection.at(j));
+        cout << "dist"<<res<< endl;
+        if(res<dist_thresh)
+        {
+            flag++;
+        }
+    }
+    if(flag==1)
+        return true;
+    else
+        return false;
+}
+
 void Standard_Hough( int, void* )
 {
     vector<Vec2f> s_lines;
     vector<vector<Point>> lines;
+    vector<vector<float>> pt_loc;
     cvtColor( edges, standard_hough, COLOR_GRAY2BGR );
 
     /// 1. Use Standard Hough Transform
     HoughLines( edges, s_lines, 0.5, CV_PI/180, min_threshold + s_trackbar, 0, 0 );
-    vector<Point> pt;
+    vector<Point> intersection;
     /// Show the result
     //cout << s_lines.size()<< endl;
     for( size_t i = 0; i < s_lines.size(); i++ )
@@ -61,55 +82,67 @@ void Standard_Hough( int, void* )
         {
             float r2 = s_lines[j][0], t2 = s_lines[j][1];
             double c4 = cos(t2), c3 = sin(t2);
-            if(abs(t1-t2)>20 || abs(t1-t2)>0.1 )
+            if(abs(r1-r2)>20 || abs(t1-t2)>0.1 )
             {
                 int x = cvRound((r2*c1-r1*c3)/(c1*c4-c2*c3));
                 int y = cvRound((r1-x*c2)/c1);
-                Point pt(x,y);
-                int dilation_size = 1 ;
-                Mat element = getStructuringElement( MORPH_RECT,
-                                                     Size( 2*dilation_size + 1, 2*dilation_size+1 ),
-                                                     Point( dilation_size, dilation_size ) );
-                /// Apply the dilation operation
-                dilate(standard_hough,standard_hough,element);
-                // applying dilation in an
-                int erosion_size = 1 ;
-                Mat element_e = getStructuringElement( MORPH_RECT,
-                                                       Size( 2*erosion_size+ 1, 2*erosion_size+1 ),
-                                                       Point( erosion_size,erosion_size ) );
-                /// Apply the erosion operation
-                erode(standard_hough,standard_hough,element);
-                double x01= r1*c2, y01 = r1*c1;
-                no_pt++;
-                double alpha = 1000;
-                Point pt1( cvRound(x01 + alpha*(-c1)), cvRound(y01 + alpha*c2) );
-                Point pt2( cvRound(x01 - alpha*(-c1)), cvRound(y01 - alpha*c2) );
-                line( standard_hough, pt1, pt2, Scalar(255,255,255), 3, LINE_AA);
-                double x02= r2*c4, y02 = r2*c3;
-                Point pt3( cvRound(x02 + alpha*(-c3)), cvRound(y02 + alpha*c4) );
-                Point pt4( cvRound(x02 - alpha*(-c3)), cvRound(y02 - alpha*c4) );
-                line( standard_hough, pt3, pt4, Scalar(255,255,255), 3, LINE_AA);
-                MyFilledCircle(standard_hough,pt);
-                cout << no_pt << endl;
-
+                if(x<length && x>0 && y< width && y>0)
+                {
+                    Point pt(x, y);
+                    int dilation_size = 1;
+                    Mat element = getStructuringElement(MORPH_RECT,
+                                                        Size(2 * dilation_size + 1, 2 * dilation_size + 1),
+                                                        Point(dilation_size, dilation_size));
+                    /// Apply the dilation operation
+                    dilate(standard_hough, standard_hough, element);
+                    // applying dilation in an
+                    int erosion_size = 1;
+                    Mat element_e = getStructuringElement(MORPH_RECT,
+                                                          Size(2 * erosion_size + 1, 2 * erosion_size + 1),
+                                                          Point(erosion_size, erosion_size));
+                    /// Apply the erosion operation
+                    erode(standard_hough, standard_hough, element);
+                    double x01 = r1 * c2, y01 = r1 * c1;
+                    no_pt++;
+                    vector<float> temp;
+                    temp.push_back(r1);
+                    temp.push_back(r2);
+                    temp.push_back(x);
+                    temp.push_back(y);
+                    temp.push_back(t1);
+                    temp.push_back(t2);
+                    pt_loc.push_back(temp);
+                    double alpha = 1000;
+                    Point pt1(cvRound(x01 + alpha * (-c1)), cvRound(y01 + alpha * c2));
+                    Point pt2(cvRound(x01 - alpha * (-c1)), cvRound(y01 - alpha * c2));
+                    line(standard_hough, pt1, pt2, Scalar(255, 255, 255), 3, LINE_AA);
+                    double x02 = r2 * c4, y02 = r2 * c3;
+                    Point pt3(cvRound(x02 + alpha * (-c3)), cvRound(y02 + alpha * c4));
+                    Point pt4(cvRound(x02 - alpha * (-c3)), cvRound(y02 - alpha * c4));
+                    line(standard_hough, pt3, pt4, Scalar(255, 255, 255), 3, LINE_AA);
+                    intersection.push_back(pt);
+                }
             }
         }
-
-        //double x0 = r*cos_t, y0 = r*sin_t;
-//        double alpha = 1000;
-//        Point pt1( cvRound(x0 + alpha*(-sin_t)), cvRound(y0 + alpha*cos_t) );
-//        Point pt2( cvRound(x0 - alpha*(-sin_t)), cvRound(y0 - alpha*cos_t) );
-//        line( standard_hough, pt1, pt2, Scalar(255,255,255), 3, LINE_AA);
-//        pt.push_back(pt1);
-//        pt.push_back(pt2);
-
-//       lines.push_back(pt);
-//        cout << lines.size()<< endl;
-
-//        pt.pop_back();
-//        pt.pop_back();
     }
-//    cout << standard_hough.size()<< endl;
+    vector<Point> corners;
+    if(intersection.size()>0)
+    {
+        cout << intersection.size() << endl;
+        for(int i=0;i<intersection.size();i++)
+        {
+            Point p = intersection.at(i);
+            if(check_dist(p,corners) )//|| i==(intersection.size()-1))
+            {
+                cout << "Final before" << corners.size() << endl;
+                corners.push_back(p);
+                cout << "Final" <<corners.size() << endl;
+            }
+
+        }
+    }
+    for(int i=0;i < corners.size();i++)
+        MyFilledCircle(standard_hough,corners.at(i));
     imshow( standard_name, standard_hough );
 }
 
@@ -150,9 +183,6 @@ int main(int argc,char** argv) {
     // Naming the window for printing the original image
     namedWindow(source_window,WINDOW_AUTOSIZE);
     // opening the window for display
-
-
-
 
     imshow(source_window,src_gray);
     // displaying the image
